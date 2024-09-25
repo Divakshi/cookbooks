@@ -1,0 +1,92 @@
+parameters:
+  - name: stageName
+    type: string
+    default: none
+  - name: stageDisplayname
+    type: string
+    default: none
+  - name: runStage
+    type: boolean
+    default: true
+  - name: jobName
+    type: string
+    default: none
+  - name: jobDisplayname
+    type: string
+    default: none
+  - name: vmImage
+    type: string
+    default: windows-2019
+  - name: jobcondition
+    type: string
+    default: ''
+  - name: jobDemand
+    type: string
+    default: ''
+  - name: globExpressions
+    type: string
+    default: ''  
+  - name: dependsOn
+    default: []  
+
+stages:
+  - stage: ${{ parameters.stageName }}
+    condition: ${{ parameters.runStage }}
+    dependsOn: ${{ parameters.dependsOn }}
+    displayName: ${{ parameters.stageDisplayname }}
+    jobs:
+    - job: ${{ parameters.jobName }}
+      timeoutInMinutes: 0
+      cancelTimeoutInMinutes: 1
+      condition: ${{ parameters. jobcondition}}
+      displayName: ${{ parameters.jobDisplayname }}
+
+      variables:
+        TemplateS3Namespace: '/image-cd-pipeline'
+
+      pool:
+        vmImage: ${{ parameters.vmImage }}
+        demands: ${{ parameters.jobDemand }}
+
+      steps:
+      - download: _BuildImageReleaseArtefacts
+        displayName: Download artifacts from Build Image Release Artefacts 2.0
+
+      - checkout: self
+
+      - checkout: _LansaAWSTemplates
+        displayName: Checkout Divakshi/aws-templates
+
+      - checkout: _Robe070Cookbooks
+        displayName: Checkout Divakshi/cookbooks
+
+      - task: AmazonWebServices.aws-vsts-tools.AWSPowerShellModuleScript.AWSPowerShellModuleScript@1
+        displayName: 'Copy ami to Us-east-1'
+        inputs:
+          awsCredentials: AzureDevOps
+          regionName: 'ap-southeast-2'
+          arguments: '-BaseImageName ''$(System.JobDisplayName)''
+          filePath: '$(System.DefaultWorkingDirectory)/aws-templates/scripts/CopyAMIToUS.ps1'
+
+      - task: AmazonWebServices.aws-vsts-tools.AWSPowerShellModuleScript.AWSPowerShellModuleScript@1
+        displayName: 'Add Name Tag'
+        inputs:
+          awsCredentials: AzureDevOps
+          regionName: 'us-east-1'
+          arguments: '-BaseImageName ''$(System.JobDisplayName)'' -Copyid ''$(Copy.id)'' -Copyname ''$(Copy.name)'''
+          filePath: '$(System.DefaultWorkingDirectory)/aws-templates/scripts/AddNameTag.ps1'
+          condition: and(succeeded(), eq(variables['Copy.Exists'], 'True'))
+
+      - task: AmazonWebServices.aws-vsts-tools.S3Upload.S3Upload@1
+        displayName: 'S3 Upload AMI File'
+        inputs:
+          awsCredentials: AzureDevOps
+          regionName: 'ap-southeast-2'
+          bucketName: lansa
+          sourceFolder: '$(System.DefaultWorkingDirectory)'
+          globExpressions: '${{ parameters.globExpressions }}'
+          targetFolder: 'templates/$(s3amiUpload)'
+          filesAcl: 'public-read'
+        condition: and(succeeded(), eq(variables['Copy.Exists'], 'True'))
+    
+    

@@ -1,0 +1,533 @@
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: _BuildImageReleaseArtefacts
+      source: Build Image Release Artefacts 2.0
+  repositories:
+    - repository: _LansaAWSTemplates
+      name: Divakshi/aws-templates
+      type: github
+      ref: feature/Aws-Image-Release-3.0
+      # endpoint: nkhlLANSA
+    - repository: _Robe070Cookbooks
+      name: Divakshi/cookbooks
+      type: github
+      ref: debug/paas
+      # endpoint: nkhlLANSA
+
+variables:
+  - group: Template Parameters
+  - group: Default Branch
+  - group: S3 uploads
+  - group: VPC ap-southeast-2
+  - group: VPC us-east-1
+  - group: Git Repos
+  - name: CookbooksSource1
+    value: c:\lansa
+  - name: imageReleaseState
+    value: Production
+  - name: jpnLanguage
+    value: JPN
+  - name: stackname
+    value: BakingDP-ImageRelease
+  - name: TemplateS3Namespace
+    value: /image-cd-pipeline
+  - name: vmImage
+    value:  windows-2019   
+
+stages:
+- stage: UpdateAUSAMIs
+  displayName: Update AUS AMIs
+  jobs:
+    - job:
+      displayName: Agent job 
+      timeoutInMinutes: 0
+      cancelTimeoutInMinutes: 1 
+
+      pool:
+        vmImage: $(vmImage) 
+        demands: '' 
+
+      steps:
+        - download: _BuildImageReleaseArtefacts
+          displayName: Download artifacts from Build Image Release Artefacts 2.0
+
+        - checkout: self
+
+        - checkout: _LansaAWSTemplates
+          displayName: Checkout Divakshi/aws-templates
+
+        - checkout: _Robe070Cookbooks
+          displayName: Checkout Divakshi/cookbooks
+
+        - task: PowerShell@2
+          displayName: 'Write access to Git Repo (lansa/aws-templates)'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/_robe070_cookbooks/scripts/GitRepoWriteAccess.ps1'
+            arguments: '-GitBranch ''$(GitLansaAwsTemplatesBranch)'' -GitURL ''https://$(GitLansaAwsTemplatesPAT):x-oauth-basic@$(GitLansaAwsTemplatesGitHubName)'' -GitUserEmail ''$(GitRepoUserEmail)'' -GitUserName ''$(GitRepoUserName)'' -GitRepoName ''$(ArtifactSourceAlias)'''
+            pwsh: true   
+
+        - task: PowerShell@2
+          displayName: 'Delete temp branch and create temp branch'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/_lansa_aws-templates/scripts/DeleteTempBranchAndCreatetempBranch.ps1'
+            arguments: '-GitBranch ''$(GitLansaAwsTemplatesTempBranch)'' -GitRepoName ''$(ArtifactSourceAlias)'''
+            pwsh: true  
+
+        - task: PowerShell@2
+          displayName: 'Update Template AMI Mappings'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/_lansa_aws-templates/scripts/UpdateTemplateAMIMappings.ps1'
+            arguments: '-ImageType ''Development'''
+            pwsh: true   
+  
+        - task: AmazonWebServices.aws-vsts-tools.AWSCLI.AWSCLI@1
+          displayName: 'AWS Template verification'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'ap-southeast-2'
+            awsCommand: 'cloudformation '
+            awsSubCommand: 'validate-template'
+            awsArguments: '--template-url  https://lansa.s3.ap-southeast-2.amazonaws.com/templates/$(CookbooksBranch)$(TemplateS3Namespace)/lansa-master-win.cfn.template'
+            failOnStandardError: false
+
+        - task: AmazonWebServices.aws-vsts-tools.S3Upload.S3Upload@1
+          displayName: 'S3 Upload: lansa'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'ap-southeast-2'
+            bucketName: lansa
+            sourceFolder: '$(System.DefaultWorkingDirectory)/_lansa_aws-templates/CloudFormationWindows'
+            globExpressions: '*.template'
+            targetFolder: 'templates/$(CookbooksBranch)$(TemplateS3Namespace)'
+            filesAcl: 'public-read'
+
+        - task: AmazonWebServices.aws-vsts-tools.AWSCLI.AWSCLI@1
+          displayName: 'AWS Delete the AMI ids from s3'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'ap-southeast-2'
+            awsCommand: s3
+            awsSubCommand: rm
+            awsArguments: 's3://lansa/templates/support/scalable/ami-list/ --recursive'
+            failOnStandardError: false       
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w16d142IMGTest'
+    stageDisplayname: 'w16d-14-2 IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w16d150IMGTest'
+    stageDisplayname: 'w16d-15-0 IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w19d142IMGTest'
+    stageDisplayname: 'w19d-14-2 IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w19d150IMGTest'
+    stageDisplayname: 'w19d-15-0 IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w22d142IMGTest'
+    stageDisplayname: 'w22d-14-2 IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w22d150IMGTest'
+    stageDisplayname: 'w22d-15-0 IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w16d142jIMGTest'
+    stageDisplayname: 'w16d-14-2j IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w16d150jIMGTest'
+    stageDisplayname: 'w16d-15-0j IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w19d142jIMGTest'
+    stageDisplayname: 'w19d-14-2j IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w19d150jIMGTest'
+    stageDisplayname: 'w19d-15-0j IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w22d142jIMGTest'
+    stageDisplayname: 'w22d-14-2j IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))             
+
+- template: Templates/IMG-TEST.yml
+  parameters:
+    stageName: 'w22d150jIMGTest'
+    stageDisplayname: 'w22d-15-0j IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: UpdateAUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w16d-14-2CopyAMItoUS'
+    stageDisplayname: 'w16d-14-2 Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w16d142IMGTest
+    globExpressions: w16d-14-2.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w16d-15-0CopyAMItoUS'
+    stageDisplayname: 'w16d-15-0 Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w16d150IMGTest
+    globExpressions: w16d-15-0.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w19d-14-2CopyAMItoUS'
+    stageDisplayname: 'w19d-14-2 Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w19d142IMGTest
+    globExpressions: w19d-14-2.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w19d-15-0CopyAMItoUS'
+    stageDisplayname: 'w19d-15-0 Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w19d150IMGTest
+    globExpressions: w19d-15-0.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w22d142CopyAMItoUS'
+    stageDisplayname: 'w22d-14-2 Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w22d142IMGTest
+    globExpressions: w22d-14-2.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+   
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w22d150CopyAMItoUS'
+    stageDisplayname: 'w22d-15-0 Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w22d150IMGTest
+    globExpressions: w22d-15-0.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w12r2d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w16d-14-2jCopyAMItoUS'
+    stageDisplayname: 'w16d-14-2j Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w16d142jIMGTest
+    globExpressions: w16d-14-2j.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w16d-15-0jCopyAMItoUS'
+    stageDisplayname: 'w16d-15-0j Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w16d150jIMGTest
+    globExpressions: w16d-15-0j.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w19d-14-2j Copy AMI to US'
+    stageDisplayname: 'w19d-14-2j Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w19d142jIMGTest
+    globExpressions: w19d-14-2j.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w19d-15-0jCopyAMItoUS'
+    stageDisplayname: 'w19d-15-0j Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w19d150jIMGTest
+    globExpressions: w19d-15-0j.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w22d-14-2j Copy AMI to US'
+    stageDisplayname: 'w22d-14-2j Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w22d142jIMGTest
+    globExpressions: w22d-14-2j.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/Copy-AMI-to-US.yml
+  parameters:
+    stageName: 'w22d-15-0jCopyAMItoUS'
+    stageDisplayname: 'w22d-15-0j Copy AMI to US'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    jobDemand: DotNetFramework
+    dependsOn: w22d150jIMGTest
+    globExpressions: w22d-15-0j.txt
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- stage: CommitAUStemplatechanges
+  displayName: Commit AUS template changes
+  dependsOn: 
+  - w16d-14-2CopyAMItoUS
+  - w16d-15-0CopyAMItoUS
+  - w16d-14-2jCopyAMItoUS
+  - w16d-15-0jCopyAMItoUS
+  - w19d-14-2CopyAMItoUS
+  - w19d-15-0CopyAMItoUS
+  - w19d-14-2jCopyAMItoUS
+  - w19d-15-0jCopyAMItoUS
+  - w22d-14-2CopyAMItoUS
+  - w22d-15-0CopyAMItoUS
+  - w22d-14-2jCopyAMItoUS
+  - w22d-15-0jCopyAMItoUS
+  jobs:
+    - job:
+      displayName: Agent job 
+      timeoutInMinutes: 0
+      cancelTimeoutInMinutes: 1 
+
+      pool:
+        vmImage: $(vmImage) 
+        demands: '' 
+
+      steps:
+        - download: _BuildImageReleaseArtefacts
+          displayName: Download artifacts from Build Image Release Artefacts 2.0
+
+        - checkout: self
+
+        - checkout: _LansaAWSTemplates
+          displayName: Checkout Divakshi/aws-templates
+
+        - checkout: _Robe070Cookbooks
+          displayName: Checkout Divakshi/cookbooks
+
+        - task: PowerShell@2
+          displayName: 'Write access to Git Repo (lansa/aws-templates)'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/cookbooks/scripts/GitRepoWriteAccess.ps1'
+            arguments: '-GitBranch ''$(GitLansaAwsTemplatesBranch)'' -GitURL ''https://$(GitLansaAwsTemplatesPAT):x-oauth-basic@$(GitLansaAwsTemplatesGitHubName)'' -GitUserEmail ''$(GitRepoUserEmail)'' -GitUserName ''$(GitRepoUserName)'' -GitRepoName ''$(ArtifactSourceAlias)'''
+            pwsh: true
+   
+
+        - pwsh: |
+           # change to project directory
+           cd $(System.DefaultWorkingDirectory)/aws-templates
+   
+           # fetch changes
+           git fetch
+           if (-not $?) {
+            Write-Host(" git fetch failed");
+            exit 1
+           }
+   
+   
+           # merge branch to the main branch (for testing merging temp branch to feature/119)
+           git pull origin $(GitLansaAwsTemplatesTempBranch)
+           if (-not $?) {
+            Write-Host(" git pull origin $(GitLansaAwsTemplatesTempBranch) failed");
+            exit 1
+           }
+   
+           # push to the main branch
+           git push
+           if (-not $?) {
+            Write-Host(" git push failed");
+            exit 1
+           }
+   
+          displayName: 'Commit AUS template changes'
+
+- stage: UpdateUSAMIs
+  displayName: Update US AMIs
+  dependsOn: CommitAUStemplatechanges
+
+  jobs:
+    - job:
+      displayName: Agent job 
+      timeoutInMinutes: 0
+      cancelTimeoutInMinutes: 1
+
+      pool:
+        vmImage: $(vmImage) 
+        demands: 'DotNetFramework' 
+
+      steps:
+        - download: _BuildImageReleaseArtefacts
+          displayName: Download artifacts from Build Image Release Artefacts 2.0
+
+        - checkout: self
+
+        - checkout: _LansaAWSTemplates
+          displayName: Checkout Divakshi/aws-templates
+
+        - checkout: _Robe070Cookbooks
+          displayName: Checkout Divakshi/cookbooks
+
+        - task: PowerShell@2
+          displayName: 'Write access to Git Repo (lansa/aws-templates)'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/cookbooks/scripts/GitRepoWriteAccess.ps1'
+            arguments: '-GitBranch ''$(GitLansaAwsTemplatesBranch)'' -GitURL ''https://$(GitLansaAwsTemplatesPAT):x-oauth-basic@$(GitLansaAwsTemplatesGitHubName)'' -GitUserEmail ''$(GitLansaAwsTemplatesUserEmail)'' -GitUserName ''$(GitLansaAwsTemplatesUserName)'' -GitRepoName ''$(ArtifactSourceAlias)'''
+            pwsh: true
+
+        - task: PowerShell@2
+          displayName: 'Delete temp branch and create temp branch'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/aws-templates/scripts/DeleteTempBranchAndCreatetempBranch.ps1'
+            arguments: '-GitBranch ''$(GitLansaAwsTemplatesTempBranch)'' -GitRepoName ''$(ArtifactSourceAlias)'''
+            pwsh: true    
+
+        - task: AmazonWebServices.aws-vsts-tools.S3Download.S3Download@1
+          displayName: 'S3 Download: lansa'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'ap-southeast-2'
+            bucketName: lansa
+            sourceFolder: 'templates/$(s3amiUpload)'
+            targetFolder: '$(System.DefaultWorkingDirectory)'
+
+        - task: AmazonWebServices.aws-vsts-tools.AWSPowerShellModuleScript.AWSPowerShellModuleScript@1
+          displayName: 'Overwrite ap-southeast-2 AMI Ids with us-east-1 AMI Ids'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'us-east-1'
+            filePath: '$(System.DefaultWorkingDirectory)/aws-templates/scripts/OverwriteAMIArtifact.ps1'
+    
+        - task: PowerShell@2
+          displayName: 'Update Template AMI Mappings'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/aws-templates/scripts/UpdateTemplateAMIMappings.ps1'
+            arguments: '-ImageType ''Production'''
+            pwsh: true
+
+        - task: AmazonWebServices.aws-vsts-tools.AWSCLI.AWSCLI@1
+          displayName: 'AWS Template verification'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'ap-southeast-2'
+            awsCommand: cloudformation
+            awsSubCommand: 'validate-template'
+            awsArguments: '--template-url  https://lansa.s3.ap-southeast-2.amazonaws.com/templates/$(CookbooksBranch)$(TemplateS3Namespace)/lansa-master-win.cfn.template'
+            failOnStandardError: false
+
+        - task: AmazonWebServices.aws-vsts-tools.S3Upload.S3Upload@1
+          displayName: 'S3 Upload: lansa'
+          inputs:
+            awsCredentials: AzureDevOps
+            regionName: 'ap-southeast-2'
+            bucketName: lansa
+            sourceFolder: '$(System.DefaultWorkingDirectory)/aws-templates/CloudFormationWindows'
+            globExpressions: '*.template'
+            targetFolder: 'templates/$(CookbooksBranch)$(TemplateS3Namespace)'
+            filesAcl: 'public-read'
+    
+    
+    
