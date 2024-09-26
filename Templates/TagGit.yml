@@ -14,9 +14,12 @@ parameters:
   - name: jobDisplayname
     type: string
     default: none
+  - name: stackname
+    type: string
+    default: none
   - name: BaseImageName
     type: string
-    default: none  
+    default: none    
   - name: vmImage
     type: string
     default: windows-2019
@@ -26,9 +29,6 @@ parameters:
   - name: jobDemand
     type: string
     default: ''
-  - name: globExpressions
-    type: string
-    default: ''  
   - name: dependsOn
     default: []  
 
@@ -41,7 +41,6 @@ stages:
     - job: ${{ parameters.jobName }}
       timeoutInMinutes: 0
       cancelTimeoutInMinutes: 1
-      condition: ${{ parameters. jobcondition}}
       displayName: ${{ parameters.jobDisplayname }}
 
       variables:
@@ -64,32 +63,31 @@ stages:
         displayName: Checkout Divakshi/cookbooks
 
       - task: AmazonWebServices.aws-vsts-tools.AWSPowerShellModuleScript.AWSPowerShellModuleScript@1
-        displayName: 'Copy ami to Us-east-1'
+        displayName: 'Artifact Check : Set Gate Variable'
+        name: Gate
         inputs:
           awsCredentials: AzureDevOps
           regionName: 'ap-southeast-2'
-          arguments: '-BaseImageName ''${{ parameters.BaseImageName }}'
-          filePath: '$(System.DefaultWorkingDirectory)/aws-templates/scripts/CopyAMIToUS.ps1'
+          arguments: '-BaseImageName''${{ parameters.BaseImageName }}''-stackname''${{ parameters.stackname }}'
+          filePath: '$(System.DefaultWorkingDirectory)/aws-templates/scripts/SetGateVariable.ps1'
 
-      - task: AmazonWebServices.aws-vsts-tools.AWSPowerShellModuleScript.AWSPowerShellModuleScript@1
-        displayName: 'Add Name Tag'
-        inputs:
-          awsCredentials: AzureDevOps
-          regionName: 'us-east-1'
-          arguments: '-BaseImageName ''${{ parameters.BaseImageName }}'' -Copyid ''$(Copy.id)'' -Copyname ''$(Copy.name)'''
-          filePath: '$(System.DefaultWorkingDirectory)/aws-templates/scripts/AddNameTag.ps1'
-          condition: and(succeeded(), eq(variables['Copy.Exists'], 'True'))
+      - pwsh: |
+          # Print the Gate variables.
+          Write-Host "Gate.IsEnabled: $(Gate.IsEnabled); Gate.ImageID: $(Gate.ImageID); Gate.version:$(Gate.version); Gate.stack:$(Gate.stack)"| Out-Default
+        displayName: 'Artifact Check : Output Gate Variable'
 
-      - task: AmazonWebServices.aws-vsts-tools.S3Upload.S3Upload@1
-        displayName: 'S3 Upload AMI File'
+      - task: PowerShell@2
+        displayName: 'Write access to Git Repo (Divakshi/cookbooks)'
         inputs:
-          awsCredentials: AzureDevOps
-          regionName: 'ap-southeast-2'
-          bucketName: lansa
-          sourceFolder: '$(System.DefaultWorkingDirectory)'
-          globExpressions: '${{ parameters.globExpressions }}'
-          targetFolder: 'templates/$(s3amiUpload)'
-          filesAcl: 'public-read'
-        condition: and(succeeded(), eq(variables['Copy.Exists'], 'True'))
-    
-    
+          targetType: filePath
+          filePath: './$(System.DefaultWorkingDirectory)/cookbooks/scripts/GitRepoWriteAccess.ps1'
+          arguments: '-GitBranch ''$(CookbooksBranch)'' -GitURL ''https://$(GitLansaAwsTemplatesPAT):x-oauth-basic@$(GitCookBooksGitHubName)'' -GitUserEmail ''$(GitRepoUserEmail)'' -GitUserName ''$(GitRepoUserName)'' -GitRepoName ''$(CookbooksSourceAlias)'''                  
+          pwsh: true
+
+      - task: PowerShell@2
+        displayName: 'Tag cookbooks repo'
+        inputs:
+          targetType: filePath
+          filePath: './$(System.DefaultWorkingDirectory)/cookbooks/scripts/GitTag.ps1'
+          arguments: '-GitRepoName ''$(CookbooksSourceAlias)'' -Tags ''AWSImage-Bld-$(Build.BuildId)-$(Release.ReleaseName)-$(Gate.version)'''            
+          pwsh: true

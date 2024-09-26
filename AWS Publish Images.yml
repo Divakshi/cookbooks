@@ -2,19 +2,19 @@ trigger: none
 
 resources:
   pipelines:
-    - pipeline: _BuildImageReleaseArtefacts
-      source: Build Image Release Artefacts 2.0
+    - pipeline: _Build Image Release Artefacts 3.0
+      source: Build Image Release Artefacts  3.0
   repositories:
     - repository: _LansaAWSTemplates
       name: Divakshi/aws-templates
       type: github
       ref: feature/Aws-Image-Release-3.0
-      # endpoint: nkhlLANSA
-    - repository: _Robe070Cookbooks
+      endpoint: Divakshi
+    - repository: _DivakshiCookbooks
       name: Divakshi/cookbooks
       type: github
-      ref: debug/paas
-      # endpoint: nkhlLANSA
+      ref: feature/AWS-Images-Cookbooks-CI-3.0
+      endpoint: Divakshi
 
 variables:
   - group: Template Parameters
@@ -34,7 +34,7 @@ variables:
   - name: TemplateS3Namespace
     value: /image-cd-pipeline
   - name: vmImage
-    value:  windows-2019   
+    value: windows-2019   
 
 stages:
 - stage: UpdateAUSAMIs
@@ -50,22 +50,22 @@ stages:
         demands: '' 
 
       steps:
-        - download: _BuildImageReleaseArtefacts
-          displayName: Download artifacts from Build Image Release Artefacts 2.0
+        - download: _Build Image Release Artefacts 3.0
+          displayName: Download artifacts from Build Image Release Artefacts 3.0
 
         - checkout: self
 
         - checkout: _LansaAWSTemplates
           displayName: Checkout Divakshi/aws-templates
 
-        - checkout: _Robe070Cookbooks
+        - checkout: DivakshiCookbooks
           displayName: Checkout Divakshi/cookbooks
 
         - task: PowerShell@2
           displayName: 'Write access to Git Repo (lansa/aws-templates)'
           inputs:
             targetType: filePath
-            filePath: './$(System.DefaultWorkingDirectory)/_robe070_cookbooks/scripts/GitRepoWriteAccess.ps1'
+            filePath: './$(System.DefaultWorkingDirectory)/cookbooks/scripts/GitRepoWriteAccess.ps1'
             arguments: '-GitBranch ''$(GitLansaAwsTemplatesBranch)'' -GitURL ''https://$(GitLansaAwsTemplatesPAT):x-oauth-basic@$(GitLansaAwsTemplatesGitHubName)'' -GitUserEmail ''$(GitRepoUserEmail)'' -GitUserName ''$(GitRepoUserName)'' -GitRepoName ''$(ArtifactSourceAlias)'''
             pwsh: true   
 
@@ -73,7 +73,7 @@ stages:
           displayName: 'Delete temp branch and create temp branch'
           inputs:
             targetType: filePath
-            filePath: './$(System.DefaultWorkingDirectory)/_lansa_aws-templates/scripts/DeleteTempBranchAndCreatetempBranch.ps1'
+            filePath: './$(System.DefaultWorkingDirectory)/aws-templates/scripts/DeleteTempBranchAndCreatetempBranch.ps1'
             arguments: '-GitBranch ''$(GitLansaAwsTemplatesTempBranch)'' -GitRepoName ''$(ArtifactSourceAlias)'''
             pwsh: true  
 
@@ -81,8 +81,8 @@ stages:
           displayName: 'Update Template AMI Mappings'
           inputs:
             targetType: filePath
-            filePath: './$(System.DefaultWorkingDirectory)/_lansa_aws-templates/scripts/UpdateTemplateAMIMappings.ps1'
-            arguments: '-ImageType ''Development'''
+            filePath: './$(System.DefaultWorkingDirectory)/aws-templates/scripts/UpdateTemplateAMIMappings.ps1'
+            arguments: '-ImageType ''Development'
             pwsh: true   
   
         - task: AmazonWebServices.aws-vsts-tools.AWSCLI.AWSCLI@1
@@ -101,7 +101,7 @@ stages:
             awsCredentials: AzureDevOps
             regionName: 'ap-southeast-2'
             bucketName: lansa
-            sourceFolder: '$(System.DefaultWorkingDirectory)/_lansa_aws-templates/CloudFormationWindows'
+            sourceFolder: '$(System.DefaultWorkingDirectory)/aws-templates/CloudFormationWindows'
             globExpressions: '*.template'
             targetFolder: 'templates/$(CookbooksBranch)$(TemplateS3Namespace)'
             filesAcl: 'public-read'
@@ -122,6 +122,8 @@ stages:
     stageDisplayname: 'w16d-14-2 IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2
+    stackname: w16d-14-2-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
@@ -132,6 +134,8 @@ stages:
     stageDisplayname: 'w16d-15-0 IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0
+    stackname: w16d-15-0-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
@@ -142,6 +146,8 @@ stages:
     stageDisplayname: 'w19d-14-2 IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2
+    stackname: w19d-14-2-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
@@ -152,6 +158,8 @@ stages:
     stageDisplayname: 'w19d-15-0 IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0
+    stackname: w19d-15-0-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
@@ -162,6 +170,8 @@ stages:
     stageDisplayname: 'w22d-14-2 IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2
+    stackname: w22d-14-2-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
@@ -172,6 +182,8 @@ stages:
     stageDisplayname: 'w22d-15-0 IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0
+    stackname: w22d-15-0-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
@@ -182,6 +194,8 @@ stages:
     stageDisplayname: 'w16d-14-2j IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2j
+    stackname: w16d-14-2j-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
@@ -192,9 +206,11 @@ stages:
     stageDisplayname: 'w16d-15-0j IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0j
+    stackname: w16d-15-0j-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
-    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
 
 - template: Templates/IMG-TEST.yml
   parameters:
@@ -202,6 +218,8 @@ stages:
     stageDisplayname: 'w19d-14-2j IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2j
+    stackname: w19d-14-2j-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
@@ -212,6 +230,8 @@ stages:
     stageDisplayname: 'w19d-15-0j IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0j
+    stackname: w19d-15-0j-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
@@ -222,6 +242,8 @@ stages:
     stageDisplayname: 'w22d-14-2j IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2j
+    stackname: w22d-14-2j-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))             
@@ -232,6 +254,8 @@ stages:
     stageDisplayname: 'w22d-15-0j IMG Test'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0j
+    stackname: w22d-15-0j-IMG
     jobDemand: DotNetFramework
     dependsOn: UpdateAUSAMIs
     jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
@@ -242,6 +266,7 @@ stages:
     stageDisplayname: 'w16d-14-2 Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2
     jobDemand: DotNetFramework
     dependsOn: w16d142IMGTest
     globExpressions: w16d-14-2.txt
@@ -253,6 +278,7 @@ stages:
     stageDisplayname: 'w16d-15-0 Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0
     jobDemand: DotNetFramework
     dependsOn: w16d150IMGTest
     globExpressions: w16d-15-0.txt
@@ -264,6 +290,7 @@ stages:
     stageDisplayname: 'w19d-14-2 Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2
     jobDemand: DotNetFramework
     dependsOn: w19d142IMGTest
     globExpressions: w19d-14-2.txt
@@ -275,6 +302,7 @@ stages:
     stageDisplayname: 'w19d-15-0 Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0
     jobDemand: DotNetFramework
     dependsOn: w19d150IMGTest
     globExpressions: w19d-15-0.txt
@@ -286,6 +314,7 @@ stages:
     stageDisplayname: 'w22d-14-2 Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2
     jobDemand: DotNetFramework
     dependsOn: w22d142IMGTest
     globExpressions: w22d-14-2.txt
@@ -297,10 +326,11 @@ stages:
     stageDisplayname: 'w22d-15-0 Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0
     jobDemand: DotNetFramework
     dependsOn: w22d150IMGTest
     globExpressions: w22d-15-0.txt
-    jobcondition: and(succeeded(), or(eq(variables['Build-w12r2d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
 
 - template: Templates/Copy-AMI-to-US.yml
   parameters:
@@ -308,6 +338,7 @@ stages:
     stageDisplayname: 'w16d-14-2j Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2j
     jobDemand: DotNetFramework
     dependsOn: w16d142jIMGTest
     globExpressions: w16d-14-2j.txt
@@ -319,10 +350,11 @@ stages:
     stageDisplayname: 'w16d-15-0j Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0j
     jobDemand: DotNetFramework
     dependsOn: w16d150jIMGTest
     globExpressions: w16d-15-0j.txt
-    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
 
 - template: Templates/Copy-AMI-to-US.yml
   parameters:
@@ -330,6 +362,7 @@ stages:
     stageDisplayname: 'w19d-14-2j Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2j
     jobDemand: DotNetFramework
     dependsOn: w19d142jIMGTest
     globExpressions: w19d-14-2j.txt
@@ -341,6 +374,7 @@ stages:
     stageDisplayname: 'w19d-15-0j Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0j
     jobDemand: DotNetFramework
     dependsOn: w19d150jIMGTest
     globExpressions: w19d-15-0j.txt
@@ -352,6 +386,7 @@ stages:
     stageDisplayname: 'w22d-14-2j Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2j
     jobDemand: DotNetFramework
     dependsOn: w22d142jIMGTest
     globExpressions: w22d-14-2j.txt
@@ -363,6 +398,7 @@ stages:
     stageDisplayname: 'w22d-15-0j Copy AMI to US'
     jobName: 'Agent job'
     jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0j
     jobDemand: DotNetFramework
     dependsOn: w22d150jIMGTest
     globExpressions: w22d-15-0j.txt
@@ -394,15 +430,15 @@ stages:
         demands: '' 
 
       steps:
-        - download: _BuildImageReleaseArtefacts
-          displayName: Download artifacts from Build Image Release Artefacts 2.0
+        - download: _Build Image Release Artefacts 3.0
+          displayName: Download artifacts from Build Image Release Artefacts 3.0
 
         - checkout: self
 
         - checkout: _LansaAWSTemplates
           displayName: Checkout Divakshi/aws-templates
 
-        - checkout: _Robe070Cookbooks
+        - checkout: DivakshiCookbooks
           displayName: Checkout Divakshi/cookbooks
 
         - task: PowerShell@2
@@ -457,15 +493,15 @@ stages:
         demands: 'DotNetFramework' 
 
       steps:
-        - download: _BuildImageReleaseArtefacts
-          displayName: Download artifacts from Build Image Release Artefacts 2.0
+        - download: _Build Image Release Artefacts 3.0
+          displayName: Download artifacts from Build Image Release Artefacts 3.0
 
         - checkout: self
 
         - checkout: _LansaAWSTemplates
           displayName: Checkout Divakshi/aws-templates
 
-        - checkout: _Robe070Cookbooks
+        - checkout: DivakshiCookbooks
           displayName: Checkout Divakshi/cookbooks
 
         - task: PowerShell@2
@@ -528,6 +564,416 @@ stages:
             globExpressions: '*.template'
             targetFolder: 'templates/$(CookbooksBranch)$(TemplateS3Namespace)'
             filesAcl: 'public-read'
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w16d-14-2USIMGTest'
+    stageDisplayname: 'w16d-14-2 US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2
+    stackname: w16d-14-2-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w16d-15-0USIMGTest'
+    stageDisplayname: 'w16d-15-0 US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0
+    stackname: w16d-15-0-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w16d-14-2jUSIMGTest'
+    stageDisplayname: 'w16d-14-2j US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2j
+    stackname: w16d-14-2j-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w16d-15-0jUSIMGTest'
+    stageDisplayname: 'w16d-15-0j US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0j
+    stackname: w16d-15-0j-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w16d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w19d-14-2USIMGTest'
+    stageDisplayname: 'w19d-14-2 US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2
+    stackname: w19d-14-2-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w19d-15-0USIMGTest'
+    stageDisplayname: 'w19d-15-0 US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0
+    stackname: w19d-15-0-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w19d-14-2jUSIMGTest'
+    stageDisplayname: 'w19d-14-2j US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2j
+    stackname: w19d-14-2j-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w19d-15-0jUSIMGTest'
+    stageDisplayname: 'w19d-15-0j US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0j
+    stackname: w19d-15-0j-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w19d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w22d-14-2USIMGTest'
+    stageDisplayname: 'w22d-14-2 US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2
+    stackname: w22d-14-2-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w22d-15-0USIMGTest'
+    stageDisplayname: 'w22d-15-0 US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0
+    stackname: w22d-15-0-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w22d-14-2jUSIMGTest'
+    stageDisplayname: 'w22d-14-2j US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2j
+    stackname: w22d-14-2j-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-14-2j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- template: Templates/US-IMG-TEST.yml
+  parameters:
+    stageName: 'w22d-15-0jUSIMGTest'
+    stageDisplayname: 'w22d-15-0j US IMG Test'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0j
+    stackname: w22d-15-0j-US-IMG
+    jobDemand: DotNetFramework
+    dependsOn: UpdateUSAMIs
+    jobcondition: and(succeeded(), or(eq(variables['Build-w22d-15-0j'], 'True'), eq(variables['Build-all'], 'True')))
+
+- stage: CommitUStemplatechanges
+  displayName: Commit US template changes
+  dependsOn: 
+  - w16d-14-2USIMGTest
+  - w16d-15-0USIMGTest
+  - w16d-14-2jUSIMGTest
+  - w16d-15-0jUSIMGTest
+  - w19d-14-2USIMGTest
+  - w19d-15-0USIMGTest
+  - w19d-14-2jUSIMGTest
+  - w19d-15-0jUSIMGTest
+  - w22d-14-2USIMGTest
+  - w22d-15-0USIMGTest
+  - w22d-14-2jUSIMGTest
+  - w22d-15-0jUSIMGTest
+  
+  jobs:
+    - job:
+      displayName: Agent job 
+      timeoutInMinutes: 0
+      cancelTimeoutInMinutes: 1
+
+      pool:
+        vmImage: $(vmImage)  
+
+      steps:
+        - download: _Build Image Release Artefacts 3.0
+          displayName: Download artifacts from Build Image Release Artefacts 3.0
+
+        - checkout: self
+
+        - checkout: _LansaAWSTemplates
+          displayName: Checkout Divakshi/aws-templates
+
+        - checkout: DivakshiCookbooks
+          displayName: Checkout Divakshi/cookbooks
+
+        - task: PowerShell@2
+          displayName: 'Write access to Git Repo (lansa/aws-templates)'
+          inputs:
+            targetType: filePath
+            filePath: './$(System.DefaultWorkingDirectory)/cookbooks/scripts/GitRepoWriteAccess.ps1'
+            arguments: '-GitBranch ''$(GitLansaAwsTemplatesBranch)'' -GitURL ''https://$(GitLansaAwsTemplatesPAT):x-oauth-basic@$(GitLansaAwsTemplatesGitHubName)'' -GitUserEmail ''$(GitRepoUserEmail)'' -GitUserName ''$(GitRepoUserName)'' -GitRepoName ''$(ArtifactSourceAlias)'''
+            pwsh: true
+
+        - pwsh: |
+           # change to project directory
+           cd $(System.DefaultWorkingDirectory)/aws-templates
+   
+           Write-Host "fetch changes"
+           git fetch
+           if (-not $?) {
+             Write-Host("git fetch failed");
+             exit 1
+           }
+   
+           Write-Host "merge branch to the main branch"
+           git pull origin  $(GitLansaAwsTemplatesTempBranch) --allow-unrelated-histories
+           if (-not $?) {
+             Write-Host("git pull origin  $(GitLansaAwsTemplatesTempBranch) --allow-unrelated-histories failed");
+             exit 1
+           }
+   
+           Write-Host "Push to the main branch (support/scalable branch)"
+           git push
+           if (-not $?) {
+             Write-Host("git push failed");
+             exit 1
+           }
+   
+           # The merge to Marketplace branch belongs in the template pipeline, so conditioned out for the moment
+   
+           if ($false) {
+           Write-Host "Checkout to (support/scalable_marketplace branch)"
+           git checkout  $(GitLansaAwsTemplatesMarketPlaceBranch)
+           if (-not $?) {
+             Write-Host("git checkout  $(GitLansaAwsTemplatesMarketPlaceBranch) failed");
+             exit 1
+           }
+   
+           # pull changes from (support/scalable branch)
+           git pull origin  $(GitLansaAwsTemplatesBranch) --allow-unrelated-histories
+           if (-not $?) {
+             Write-Host("git pull origin  $(GitLansaAwsTemplatesBranch) --allow-unrelated-histories failed");
+             exit 1
+           }
+   
+           # push to the main branch  (support/scalable_marketplace branch)
+           git push
+           if (-not $?) {
+             Write-Host("git push failed");
+             exit 1
+           }
+   
+           } # if($false)
+   
+          displayName: 'Commit US template changes'
     
-    
-    
+- stage: Marketplace
+  displayName: Marketplace
+  dependsOn: CommitUStemplatechanges
+
+  jobs:
+    - job:
+      displayName: Agentless job 
+      timeoutInMinutes: 0
+
+      # pool:
+      #   vmImage: $(vmImage)  
+
+      steps:
+        # - download: _Build Image Release Artefacts 3.0
+        #   displayName: Download artifacts from Build Image Release Artefacts 3.0
+
+        # - checkout: self
+
+        # - checkout: _LansaAWSTemplates
+        #   displayName: Checkout Divakshi/aws-templates
+
+        # - checkout: DivakshiCookbooks
+        #   displayName: Checkout Divakshi/cookbooks
+
+        - task: ManualIntervention@8
+          displayName: 'Marketplace Instructions'
+          inputs:
+            instructions: |
+              1. Manual step. Submit US AMIs to AWS MP. Upload the AMIs to AWS Markeplace.
+              a. In N. Virginia, find date that is in the name that all the AMIs of this release share
+              b. Go to AWS MP, Assets, AMI and Add AMI. Enter the date from the AMI Name.
+              c. select all the images. 8? Click Next and enter the Role : arn:aws:iam::775488040364:role/AWS-Marketplace-Ingestion
+              d. Click through, taking all the defaults
+              2. Manually update a copy of the Product Load Form (today's date in the name) with the US AMIs.
+              b. Pull the latest aws-templates support/scalable branch and check that all the AMis in the diff are in the PLF
+              3. Even if only the images are being updated, the Template CD pipeline must be run to upload the updated templates to S3 ready for publication.
+              4. Increment the Version Numbers in the Build Image Release Artefacts CI pipeline
+              5. Increment the VersionText-TemplateCI variable for the Template CI pipeline testing
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2
+    stackname: w16d-14-2-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0
+    stackname: w16d-15-0-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2
+    stackname: w19d-14-2-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0
+    stackname: w19d-15-0-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2
+    stackname: w22d-14-2-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0
+    stackname: w22d-15-0-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-14-2j
+    stackname: w16d-14-2j-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w16d-15-0j
+    stackname: w16d-15-0j-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-14-2j
+    stackname: w19d-14-2j-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w19d-15-0j
+    stackname: w19d-15-0j-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-14-2j
+    stackname: w22d-14-2j-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
+
+- template: Templates/TagGit.yml
+  parameters:
+    stageName: 'TagGit'
+    stageDisplayname: 'Tag Git'
+    jobName: 'Agent job'
+    jobDisplayname: 'Agent job'
+    BaseImageName: w22d-15-0j
+    stackname: w22d-15-0j-IMG
+    jobDemand: DotNetFramework
+    dependsOn: Marketplace
